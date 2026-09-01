@@ -121,20 +121,6 @@ module Xiki
       nil
     end
 
-    def self.do_status
-
-      prefix = Keys.prefix :clear=>1
-      dir = Keys.bookmark_as_path :prompt=>"Enter a bookmark to git diff in: "
-
-      txt = "
-        #{dir}
-          $ git status
-        ".unindent
-
-      Launcher.open txt, :buffer_name=>"git log"
-
-      nil
-    end
 
 
     def self.do_compare_repository

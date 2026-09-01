@@ -1,11 +1,19 @@
-module Xiki::Menu
-  class Git
+require 'xiki/core/core_ext' if ! defined?(CoreExt)
+require 'xiki/core/bookmarks' if ! defined?(Xiki::Bookmarks)
+require 'xiki/core/shell' if ! defined?(Xiki::Shell)
+require 'xiki/core/tree' if ! defined?(Xiki::Tree)
+require 'xiki/core/git' if ! defined?(Xiki::Git)
+
+module Xiki
+  module Menu
+    class Git
 
     @@git_diff_options = '-U2'
 
     MENU = "
       - .diff/
       - .status/
+      - .commit/
       - .log/
       - .graph/
       - .setup/
@@ -26,9 +34,16 @@ module Xiki::Menu
         - .revert/
         - .unadd/
       - .status/
+        - .stage/
+        - .unstage/
+        - .discard/
+        - .staged/
         - .commit/
-        - .add/
+          - .amend/
         - .remove/
+        - .revert/
+      - .commit/
+        - .amend/
       "
 
     def self.menu_before *args
@@ -91,103 +106,242 @@ module Xiki::Menu
     end
 
 
+    def self.status_files dir=nil
+      raw = Shell.command("git status --porcelain -uall", :dir=>dir)
+
+      added = []
+      modified = []
+      removed = []
+      untracked = []
+
+      raw.each_line do |line|
+        line = line.chomp
+        next if line.empty?
+        x = line[0]
+        y = line[1]
+        file = line[3..-1]
+        next unless file
+
+        # Staged in index (added)
+        if ['A', 'M', 'D', 'R', 'C'].include?(x)
+          added << file
+        end
+
+        # Working tree modified (unstaged)
+        if y == 'M'
+          modified << file
+        end
+
+        # Removed / deleted (unstaged deletion or staged deletion)
+        if y == 'D' || x == 'D'
+          removed << file
+        end
+
+        # Untracked
+        if x == '?' && y == '?'
+          untracked << file
+        end
+      end
+
+      {
+        :staged => added.uniq.sort,
+        :added => added.uniq.sort,
+        :modified => modified.uniq.sort,
+        :removed => removed.uniq.sort,
+        :untracked => untracked.uniq.sort,
+      }
+    end
+
     def self.status *args
 
-      options = yield
-      dir = options[:dir]
+      options = yield if block_given?
+      options ||= {}
+      dir = options[:dir] || Tree.closest_dir
 
-      # /status, so list files...
+      files = self.status_files dir
 
-      if args == []
+      # /status (no args), list commit and categories that contain files...
+      if args.empty?
+        categories = ["+ commit/\n"]
+        categories << "+ staged/\n" if files[:staged].any?
+        categories << "+ modified/\n" if files[:modified].any?
+        categories << "+ removed/\n" if files[:removed].any?
+        categories << "+ untracked/\n" if files[:untracked].any?
 
-        txt = Shell.command("git status .", :dir=>dir)
-        txt = Tree.quote txt
-        txt.gsub! /^: #/, ':'
+        if files.values.all?(&:empty?)
+          categories << "| (no changes in working tree)\n"
+        end
 
-        txt.gsub! /^:\t(modified|deleted|renamed|new file): +/, "+ \\1: "
-
-        txt.gsub! /^:\t/, "+ "
-
-        # Add blank space above unstaged, but only if both added and unadded files
-        txt.gsub!(/\n:\n: (Changes|Untracked) /, "\n\n:\n: \\1 ") #if txt =~ /: Changes to be committed:\n/
-
-        txt.sub! /^\+ /, "+ commit/\n\\0"
-
-        return txt
+        return categories.join
       end
 
-      label = args[0].slice!(/^.+?: /)
+      category = args.shift
+      category = "staged" if category == "added"
 
-      quote = args.pop if args[-1] =~ /^:/
-      file = args.join "/"
-
-      # /status/a.txt, so show diff or contents...
-
-      if ! quote
-
-        task = options[:task]
-
-        return "* add\n* add multiple\n* remove\n* unadd\n* revert" if task == []
-        return self.tasks_item task, file, dir if task
-
-        # "modified:", so show diff
-        if label == "modified: "
-          txt, error = self.diff_internal("git diff --patience --relative #{self.git_diff_options} #{file}", dir)
-          txt = "-no changes" if txt == ""
-
-          txt.gsub!(/^/, ':')
-          txt.gsub!(/^:(---|\+\+\+|diff|index) .+\n/, '')
-          return txt
-        end
-
-        if label == "renamed: "
-          file.sub! /.+ -> /, ''   # Remove the first file
-          txt, error = self.diff_internal("git diff --patience --relative #{self.git_diff_options} #{file}", dir)
-          txt = "-no changes" if txt == ""
-          txt.gsub!(/^/, ':')
-          txt.gsub!(/^:(---|\+\+\+|diff|index) .+\n/, '')
-          return txt
-        end
-
-        # "deleted:", so show old file
-
-        if label == "deleted: "
-          txt = Shell.command("git show HEAD:#{file}", :dir=>dir)
-          return txt.gsub!(/^/, ':-')
-        end
-
-        # a.txt (no label), so just show from disk...
-
-        if ! label || label == "new file: "
-          txt = File.read("#{dir}#{file}").gsub(/^/, ":+")
-          txt = ":@@ +1\n#{txt}"
-          return txt
-          return "todo > show from disk"
-        end
-
-        # We don't know the label
-
-        return "Don't understand the label: #{label}"
+      if category == "commit"
+        return self.commit(*args) { options }
       end
 
-      # /status/a.txt/:content, so navigate to the file...
+      # Handle legacy label like "modified: foo.txt" or raw file
+      if !["staged", "modified", "removed", "untracked"].include?(category)
+        args.unshift category
+        category = nil
+      end
 
-      file.sub! /.+ -> /, ''   # In case it's "renamed: a -> b"
+      # /status/<category>/, list files under that category...
+      if args.empty?
+        cat_files = files[category.to_sym] || []
+        if cat_files.empty?
+          return "| No #{category} files\n"
+        end
+        return cat_files.map { |f| "+ #{f}\n" }.join
+      end
 
-      whole_path = "#{dir}#{file}"
-      self.jump_to_file_in_tree whole_path
+      # /status/<category>/<file>/...
 
-      return ""
+      # If last arg is a diff line (|... or :...), jump to file in tree
+      if args.last =~ /^[|:]/
+        args.pop
+        file = args.join("/")
+        file.sub!(/.+ -> /, "")
+        whole_path = "#{dir}#{file}"
+        self.jump_to_file_in_tree whole_path
+        return nil
+      end
 
+      # If an action was chosen (stage, unstage, discard, staged, add, revert, remove)
+      if ["stage", "unstage", "discard", "staged", "add", "revert", "remove"].include?(args.last)
+        action = args.pop
+        file = args.join("/")
+        file.sub!(/.+ -> /, "")
+        return self.tasks_item [action], file, dir
+      end
+
+      # If options[:task] is set (invoked via task menu)
+      task = options[:task]
+      if task == []
+        return "* stage\n* unstage\n* discard"
+      elsif task
+        file = args.join("/")
+        file.sub!(/.+ -> /, "")
+        return self.tasks_item task, file, dir
+      end
+
+      # File expanded: show options and diff formatted at each hunk
+      file = args.join("/")
+      file.sub!(/.+ -> /, "")
+
+      diff_txt = ""
+
+      if category == "staged" || category == "added"
+        command = "git diff --cached #{self.git_diff_options} --patience --relative -- \"#{file}\""
+        diff_txt, error = self.diff_internal command, dir
+        if diff_txt.blank? && File.file?("#{dir}#{file}")
+          content = File.read("#{dir}#{file}") rescue ""
+          diff_txt = "@@ +1\n" + content.lines.map { |l| "+#{l}" }.join
+        end
+        return self.format_hunks diff_txt, true
+      elsif category == "modified"
+        command = "git diff #{self.git_diff_options} --patience --relative -- \"#{file}\""
+        diff_txt, error = self.diff_internal command, dir
+        return self.format_hunks diff_txt, false
+      elsif category == "removed"
+        command = "git diff #{self.git_diff_options} --patience --relative -- \"#{file}\""
+        diff_txt, error = self.diff_internal command, dir
+        is_staged = false
+        if diff_txt.blank?
+          command = "git diff --cached #{self.git_diff_options} --patience --relative -- \"#{file}\""
+          diff_txt, error = self.diff_internal command, dir
+          is_staged = true if diff_txt.present?
+        end
+        if diff_txt.present?
+          return self.format_hunks diff_txt, is_staged
+        else
+          show_txt = Shell.command("git show HEAD:\"#{file}\"", :dir=>dir) rescue ""
+          if show_txt.present?
+            diff_txt = "@@ -1\n" + show_txt.lines.map { |l| "-#{l}" }.join
+            return self.format_hunks diff_txt, is_staged
+          end
+        end
+      elsif category == "untracked"
+        if File.file?("#{dir}#{file}")
+          content = File.read("#{dir}#{file}") rescue ""
+          diff_txt = "@@ +1\n" + content.lines.map { |l| "+#{l}" }.join
+          return self.format_hunks diff_txt, false
+        end
+      else
+        command = "git diff #{self.git_diff_options} --patience --relative -- \"#{file}\""
+        diff_txt, error = self.diff_internal command, dir
+        is_staged = false
+        if diff_txt.blank?
+          command = "git diff --cached #{self.git_diff_options} --patience --relative -- \"#{file}\""
+          diff_txt, error = self.diff_internal command, dir
+          is_staged = true if diff_txt.present?
+        end
+        if diff_txt.present?
+          return self.format_hunks diff_txt, is_staged
+        elsif File.file?("#{dir}#{file}")
+          content = File.read("#{dir}#{file}") rescue ""
+          diff_txt = "@@ +1\n" + content.lines.map { |l| "+#{l}" }.join
+          return self.format_hunks diff_txt, false
+        end
+      end
+
+      self.format_hunks diff_txt, false
+    end
+
+    def self.format_hunks diff_txt, is_staged=false
+      return "| (no diff)\n" if diff_txt.nil? || diff_txt.strip.empty?
+
+      hunk_options = is_staged ? "+ staged\n+ unstage\n+ discard\n" : "+ stage\n+ unstage\n+ discard\n"
+
+      diff_txt = diff_txt.sub(/.*?^(@@ )/m, "\\1")
+      return "| (no diff)\n" unless diff_txt =~ /^@@ /
+
+      hunk_chunks = diff_txt.split(/^(?=@@ )/)
+
+      formatted_hunks = hunk_chunks.map do |chunk|
+        self.clean! chunk
+        quoted_chunk = chunk.lines.map do |line|
+          line =~ /^\|/ ? line : "|#{line}"
+        end.join
+        "#{hunk_options}#{quoted_chunk}"
+      end
+
+      formatted_hunks.join
     end
 
     def self.tasks_item task, file, dir
 
-      if task == ["add"]
-        command = "git add \"#{file}\""
+      if task == ["stage"] || task == ["add"]
+        command = "git add -- \"#{file}\""
         txt = Shell.sync command, :dir=>dir
         return Tree.quote(txt) if txt.any?
-        return "<* added!"
+        return "<* staged!"
+      end
+
+      if task == ["unstage"] || task == ["unadd"]
+        command = "git reset HEAD -- \"#{file}\""
+        txt = Shell.sync command, :dir=>dir
+        if txt =~ /fatal: ambiguous argument 'HEAD'/
+          txt = Shell.sync "git reset -- \"#{file}\"", :dir=>dir
+        end
+        return Tree.quote(txt) if txt =~ /^fatal:/
+        return "<* unstaged!"
+      end
+
+      if task == ["discard"] || task == ["revert"]
+        Shell.sync "git reset HEAD -- \"#{file}\"", :dir=>dir rescue nil
+        command = "git checkout HEAD -- \"#{file}\""
+        txt = Shell.sync command, :dir=>dir
+        if txt =~ /fatal:/ || txt =~ /error:/
+          txt = Shell.sync "git checkout -- \"#{file}\"", :dir=>dir
+        end
+        return "<* discarded!"
+      end
+
+      if task == ["staged"]
+        return "<* already staged!"
       end
 
       if task == ["add multiple"]
@@ -198,21 +352,9 @@ module Xiki::Menu
       end
 
       if task == ["remove"]
-        command = "git rm -r \"#{file}\""
+        command = "git rm -r -- \"#{file}\""
         txt = Shell.sync command, :dir=>dir
         return "<* removed!"
-      end
-
-      if task == ["unadd"]
-        command = "git reset \"#{file}\""
-        txt = Shell.sync command, :dir=>dir
-        return "<* it was reset!"
-      end
-
-      if task == ["revert"]
-        command = "git checkout \"#{file}\""
-        txt = Shell.sync command, :dir=>dir
-        return "<* file reverted!"
       end
 
     end
@@ -290,13 +432,99 @@ module Xiki::Menu
       "<* added!"
     end
 
-    def self.commit message=nil
-      return "<? Enter a commit message" if message.nil?
+    def self.commit *args
+      options = yield if block_given?
+      options ||= {}
+      dir = options[:dir] || Tree.closest_dir
 
-      options = yield
-      dir = options[:dir]
+      # /commit (no args), so show template for commit message
+      if args.empty?
+        files = self.status_files dir
+        warning = files[:staged].empty? ? "| Note: nothing staged to commit yet. Stage files first with + stage\n|\n" : ""
+        return "
+          #{warning}+ do commit/
+          - enter message/
+          + amend/
+          | Type or paste your commit message below, then expand '+ do commit/':
+          |
+          | Summary of changes
+          |
+          | Detailed multi-line explanation of changes.
+          ".unindent
+      end
 
-      self.commit_internal message, dir
+      is_amend = false
+
+      if args[0] == "amend"
+        args.shift
+        is_amend = true
+        if args.empty?
+          last_msg = Shell.command("git log -1 --pretty=format:%B", :dir=>dir) rescue ""
+          last_msg = "Amended commit message\n" if last_msg.blank?
+          quoted_last_msg = last_msg.lines.map { |l| l.chomp.empty? ? "|\n" : "| #{l.chomp}\n" }.join
+          return "
+            + do amend/
+            - reuse message/
+            - enter message/
+            | Edit your amend commit message below, then expand '+ do amend/':
+            |
+            #{quoted_last_msg}
+            ".unindent
+        end
+      end
+
+      if args[0] == "reuse message"
+        txt, error = Shell.command "git commit --amend --no-edit", :dir=>dir, :return_error=>1
+        if error && !error.empty? && (txt.nil? || txt.empty?)
+          return "| Error amending:\n" + error.lines.map { |l| "| #{l}" }.join
+        end
+        res = (txt && !txt.empty?) ? txt : "Amended!"
+        return "<* amended!\n" + res.lines.map { |l| "| #{l}" }.join
+      end
+
+      if args[0] == "do amend"
+        is_amend = true
+        args.shift
+        # Grab sibling lines from the buffer
+        siblings = Tree.siblings(:cross_blank_lines=>1) rescue []
+        msg_lines = siblings.select { |l| l =~ /^\|/ }.map { |l| l.sub(/^\| ?/, '') }
+        message = msg_lines.join("\n") if msg_lines.any?
+      end
+
+      if args[0] == "enter message"
+        if args.length == 1
+          return is_amend ? "<? Enter amend commit message" : "<? Enter commit message"
+        else
+          message = args[1..-1].join("/")
+        end
+      elsif args[0] == "do commit"
+        # Grab sibling lines from the buffer
+        siblings = Tree.siblings(:cross_blank_lines=>1) rescue []
+        msg_lines = siblings.select { |l| l =~ /^\|/ }.map { |l| l.sub(/^\| ?/, '') }
+        message = msg_lines.join("\n") if msg_lines.any?
+      end
+
+      if message.blank?
+        message = args.join("\n")
+      end
+
+      message = message.lines.reject { |l| l =~ /Type (or paste )?(your )?commit message below/i || l =~ /Edit (your )?amend commit message below/i || l =~ /Or insert commit message below/i || l =~ /Note: nothing staged/i }.join
+      message.gsub!(/^\| ?/, '')
+      message.strip!
+
+      return is_amend ? "<? Enter amend commit message" : "<? Enter commit message" if message.blank?
+
+      cmd = is_amend ? "git commit --amend -F -" : "git commit -F -"
+      txt, error = Shell.command cmd, :dir=>dir, :stdin=>message, :return_error=>1
+
+      if error && !error.empty? && (txt.nil? || txt.empty?)
+        action_name = is_amend ? "amending" : "committing"
+        return "| Error #{action_name}:\n" + error.lines.map { |l| "| #{l}" }.join
+      end
+
+      action_past = is_amend ? "amended" : "committed"
+      res = (txt && !txt.empty?) ? txt : "#{action_past.capitalize}!"
+      "<* #{action_past}!\n" + res.lines.map { |l| "| #{l}" }.join
     end
 
     def self.methods_by_date path
@@ -765,4 +993,6 @@ module Xiki::Menu
       txt.any?   # It's in the repository if it didn't return blank
     end
 
-end; end
+    end
+  end
+end

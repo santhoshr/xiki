@@ -121,10 +121,27 @@ $ git diff
 
 
 > .Status shell action
+$ git status
+  |:anything
+
 $ git
   |:    status     Show the working tree status
 
-!.Shell.command('git status', :dir=>dir).snippet
+!.#
+! # Lets you expand "$ git status", to list files under added, modified, removed,
+! # show options to stage, unstage, add, and show diffs.
+! #
+! if ! shell_command
+!   shell_command = "git status"
+! end
+!
+! if shell_command == "git"
+!   args.shift
+! end
+!
+! require "#{Xiki.dir}roots/git" if ! defined?(Xiki::Menu::Git)
+!
+! Xiki::Menu::Git.status(*args) { {:dir => dir} }
 
 
 > .Remote shell action
