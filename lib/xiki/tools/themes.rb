@@ -25,6 +25,7 @@ module Xiki
 
       $el.el4r_lisp_eval %`
         (defun xiki-bar-add-padding (txt &optional space-face)
+          (setq txt (or txt ""))
           (let ((total (window-width)) left right)
             (setq left (- total (length txt)))
             (setq left (/ left 2))
@@ -33,14 +34,14 @@ module Xiki
             (when (> 2 right) (setq right 2))
             (if space-face
               (concat
-                (propertize (make-string left ? ) 'face space-face)   ; Make string of spaces
+                (propertize (make-string left ?\s) 'face space-face)   ; Make string of spaces
                 txt
-                (propertize (make-string right ? ) 'face space-face)   ; Make string of spaces
+                (propertize (make-string right ?\s) 'face space-face)   ; Make string of spaces
               )
               (concat
-                (make-string left ? )   ; Make string of spaces
+                (make-string left ?\s)   ; Make string of spaces
                 txt
-                (make-string right ? )   ; Make string of spaces
+                (make-string right ?\s)   ; Make string of spaces
               )
             )
           )

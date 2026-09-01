@@ -2854,17 +2854,13 @@ module Xiki
 
 
     def self.blank_out_wrapper_patterns txt
-      # |:... under shell commands
-      # |:... by itself
-
-      # txt.gsub!(/t/, "--")
-      # txt.gsub!(/^[^ \n].*\n  \|:.+\n+/, "")
-      txt.gsub!(/^[^ \n].*\n  \|:.+\n/, "\n\n")
-
-      txt.gsub!(/^ *\|:.+\n/, "\n")
-
-      # txt.sub!(/(^[$%&] .+\n  \|:.+\n+)+/, '')
-
+      if txt =~ /^!/m
+        txt.sub!(/\A.*?(?=^!)/m, "")
+      else
+        txt.gsub!(/^ *[$%&][^\n]*\n+ +\|:[^\n]*\n*/, "")
+        txt.gsub!(/^ *\|:[^\n]*\n*/, "")
+        txt.sub!(/\A\n+/, "")
+      end
     end
 
 

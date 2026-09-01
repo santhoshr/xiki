@@ -226,7 +226,8 @@ You may need to do something like:
 
             (file-error
               (let ((process-name (start-process "xiki-forker" (get-buffer-create "*xiki-forker*") el4r-ruby-program el4r-instance-program "forker")))
-                (accept-process-output process-name)
+                (while (process-live-p process-name)
+                  (accept-process-output process-name 0.1))
               )
 
               ; If the script returned (lisp code) while forking, it's probably an error about ruby 1.8, so eval it
@@ -240,7 +241,17 @@ You may need to do something like:
               (message "el4r > tried 2nd time")
               ;; (message "before")
               ;; (message buffer)
-              (make-network-process :remote (expand-file-name "~/.xikisock") :name el4r-process-name :buffer buffer :service t)
+              (let ((retries 50)
+                    (sock (expand-file-name "~/.xikisock"))
+                    res)
+                (while (and (not res) (> retries 0))
+                  (condition-case nil
+                      (setq res (make-network-process :remote sock :name el4r-process-name :buffer buffer :service t))
+                    (file-error
+                     (setq retries (1- retries))
+                     (sleep-for 0.1))))
+                (or res
+                    (make-network-process :remote sock :name el4r-process-name :buffer buffer :service t)))
               ;; (message "after")
             )
             (error

@@ -936,7 +936,7 @@ module Xiki
 
       # :... or ...\n arg, so delegate to the shell wrapper, if only to show appropriate error...
 
-      return self.shell_wrapper(options) if args && (args[0] =~ /^[:]/ || args[0] =~ /\n/)   #> ||||||||||||||
+      return self.shell_wrapper(options) if args && (args[0] =~ /^[:+]/ || args[0] =~ /\n/ || args[0] =~ /^create\b/)   #> ||||||||||||||
 
 
       # $ command/[any other arg], so delegate to the corresponding =command xiki command...
@@ -1244,7 +1244,7 @@ Ol.stack 15   #> |||||||||||||||-
 
           # Use the shell dir when running commands
           Dir.chdir(self.dir) do   #> ||||
-            result = Xiki.expand(command_to_try, args_in, options)   #> |||||
+            result = Xiki.expand(command_root, args_in.compact, options)   #> |||||
           end
 
           # Returning nil should mean they didn't handle, even when children (shell output) passed
@@ -1325,7 +1325,7 @@ Ol.stack 15   #> |||||||||||||||-
 
       # Return the view dir if no session (don't unnecessarily create a session)
       if ! @@sessions[key]
-        dir = if $el.boundp(:xiki_shell_last_cd)
+        dir = if $el && $el.boundp(:xiki_shell_last_cd)
           $el.elvar.xiki_shell_last_cd
         else
           View.dir(:startup_dir_if_topic=>1)
@@ -1477,7 +1477,7 @@ Ol.stack 15   #> |||||||||||||||-
 
     # In-memory cache of the shell commands we've run in this session.
     def self.session_cache
-      $el.boundp(:xiki_shell_commands_session_cache) ?
+      $el && $el.boundp(:xiki_shell_commands_session_cache) ?
         $el.elvar.xiki_shell_commands_session_cache :
         nil
     end
@@ -1490,7 +1490,7 @@ Ol.stack 15   #> |||||||||||||||-
 
       val ? val.<<("#{command}\n") : val = "#{command}\n"
 
-      $el.elvar.xiki_shell_commands_session_cache = val
+      $el.elvar.xiki_shell_commands_session_cache = val if $el
 
       nil
 

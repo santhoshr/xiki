@@ -72,13 +72,15 @@ module Xiki
     # Path.escape "Hey\nyou"
     #   Hey;0you
     def self.escape item
-      item = item.dup
+      return "" if item.nil?
+      item = item.to_s.dup
       self.escape! item
       item
     end
 
     def self.unescape item
-      item = item.dup
+      return "" if item.nil?
+      item = item.to_s.dup
       self.unescape! item
       item
     end
@@ -191,7 +193,8 @@ module Xiki
 
     # Joins path array into a string, being sure to re-escape slashes
     def self.join array
-      array.map{|o| self.escape o}.join "/"
+      return "" if array.nil?
+      array.compact.map{|o| self.escape o}.join "/"
     end
 
   end

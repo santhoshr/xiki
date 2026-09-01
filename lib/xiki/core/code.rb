@@ -325,7 +325,7 @@ module Xiki
       # Make sure only one line break
       txt = "#{txt.sub(/\n+\z/, '')}\n"
 
-      options[:args] = options[:items]
+      options[:args] = options[:items] if options[:items]
 
       # ".", so evaluate as javascript...
 

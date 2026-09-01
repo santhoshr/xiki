@@ -1,6 +1,15 @@
 # Meant to log short succinct messages to help with troubleshooting
 # while coding.  Log statements hyperlink back to the line that logged it.
 
+Fixnum = Integer unless defined?(Fixnum)
+Bignum = Integer unless defined?(Bignum)
+File.singleton_class.alias_method :exists?, :exist? unless File.respond_to?(:exists?)
+Dir.singleton_class.alias_method :exists?, :exist? unless Dir.respond_to?(:exists?)
+class Object
+  def =~(other); nil; end unless method_defined?(:=~)
+  def !~(other); !(self =~ other); end unless method_defined?(:!~)
+end
+
 require 'fileutils'
 
 class Ol

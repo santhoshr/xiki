@@ -1,5 +1,35 @@
 require 'xiki/core/text_util'
 
+require 'uri'
+
+module URI
+  def self.encode(*args)
+    DEFAULT_PARSER.escape(*args)
+  end unless respond_to?(:encode)
+
+  def self.escape(*args)
+    DEFAULT_PARSER.escape(*args)
+  end unless respond_to?(:escape)
+
+  def self.decode(*args)
+    DEFAULT_PARSER.unescape(*args)
+  end unless respond_to?(:decode)
+
+  def self.unescape(*args)
+    DEFAULT_PARSER.unescape(*args)
+  end unless respond_to?(:unescape)
+end
+
+class Object
+  def =~(other)
+    nil
+  end unless method_defined?(:=~)
+
+  def !~(other)
+    !(self =~ other)
+  end unless method_defined?(:!~)
+end
+
 class Array
   def blank?
     self.empty?

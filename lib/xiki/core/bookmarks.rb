@@ -256,7 +256,7 @@ module Xiki
       "pi"=>"~/Pictures/",
       "k"=>"#{Xiki.dir}lib/xiki/core/key_shortcuts.rb",
       "us"=>"/usr/",
-      "lo"=>"/usr/local/",
+      "ul"=>"/usr/local/",
       "ap"=>"/Applications/",
       "vo"=>"/Volumes/",
     }

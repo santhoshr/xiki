@@ -28,18 +28,30 @@ $ git
 ! # No args, so make branches start with colons...
 ! if args == []
 !   shell_output ||= Shell.command("git branch", :dir=>dir).snippet
-!   return shell_output.gsub(/^\| /, ": ")
+!   return "+ create branch/\n" + shell_output.gsub(/^\| /, ": ")
 ! end
 !
-! # Branch passed, so show options...
+! # Branch or create branch passed, so show options...
 ! if args.length == 1
+!   if args[0] == "create branch"
+!     return "<? Enter branch name"
+!   end
 !   return "
 !     + switch to
 !     + delete
 !   "
 ! end
 !
-! branch = args[0][/\w+/]
+! if args[0] == "create branch"
+!   branch_name = args[1][/[a-zA-Z0-9_\-\.\/]+/]
+!   output = Shell.command("git checkout -b #{branch_name}", :dir=>dir)
+!   View.message output
+!   shell_output = Shell.command("git branch", :dir=>dir).snippet
+!   shell_output.gsub!(/^\| /, "  : ")
+!   return "=replace/siblings/2/\n#{shell_output}"
+! end
+!
+! branch = args[0][/[a-zA-Z0-9_\-\.\/]+/]
 !
 ! if args[1] == "switch to"
 !   output = Shell.command("git checkout #{branch}", :dir=>dir)
@@ -72,7 +84,7 @@ $ git
 ! #
 !
 ! if ! shell_command
-!   return "| This action makes the '$ git log' shell command interactive."
+!   shell_command = "git log"
 ! end
 !
 ! if shell_command == "git"
@@ -103,6 +115,7 @@ $ git diff
 !.
 ! # Colorizes diff lines as red and green.
 !
+! shell_output ||= Shell.command("git diff", :dir=>dir).snippet
 ! shell_output.gsub(/^\| ([+-])/, "|\\1").gsub(/^\|  /, "|")
 !
 
@@ -111,6 +124,16 @@ $ git diff
 $ git
   |:    status     Show the working tree status
 
-!.Shell.command('git status').snippet
+!.Shell.command('git status', :dir=>dir).snippet
+
+
+> .Remote shell action
+$ git remote
+  |:anything
+
+$ git
+  |:    remote     Show remotes
+
+!.Shell.command('git remote -v', :dir=>dir).snippet
 
 

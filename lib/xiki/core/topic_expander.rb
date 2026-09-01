@@ -481,7 +481,9 @@ module Xiki
       # Non-existing file, so create
       file ||= "~/xiki/#{name}.xiki"
 
-      txt = Notes.drill(file, *items, options)   #> |||
+      action_args = items[1..-1] if items.length > 1
+
+      txt = Notes.drill(file, items[0], options)
 
       # topic/path, so expand as action, or insert unquoted (if normal heading)
 
@@ -496,18 +498,21 @@ module Xiki
         heading_found = Notes.remove_ignorable_heading_parens heading_found
 
         if heading_found =~ /^> (@\w* )?\./   #> "> @ .One shared"
-          # Heading didn't have a dot, so just show literally
+          # Heading was an action, so expand action with remaining items as args!
 
           # Add action to history
           Topic.append_log "#{name.gsub('_', ' ')}/#{items.join("/")}"
 
           txt = Tree.unquote txt
 
-          items.shift if items
+          options[:args] = action_args || []
+          options[:items] = action_args || []
           return options[:output] = self.expand_action(txt, file, options)
         else
-          # topic/path matched "> note", so unquote under equals...
-
+          # Not an action (regular note heading), so if more items were passed, drill with all items
+          if action_args
+            txt = Notes.drill(file, *items, options)
+          end
           txt = Tree.unquote txt
 
           return options[:output] = txt
@@ -679,7 +684,7 @@ module Xiki
         txt.sub!(/(^![^\n]+)\n\n.+/m, "\\1\n")
 
         # Eval code as javascript/ruby.
-        txt = Code.eval_snippet txt, file, options[:heading_line_number]+1, nil, options
+        txt = Code.eval_snippet txt, file, (options[:heading_line_number] || 0)+1, nil, options
 
         return txt
 

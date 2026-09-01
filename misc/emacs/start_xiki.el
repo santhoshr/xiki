@@ -34,23 +34,28 @@
 (defun message (fmt &rest args)
   "Ignore useless messages."
   (cond
+    ((null fmt)
+     (apply message--old fmt args))
+    ((not (stringp fmt))
+     (apply message--old fmt args))
     ((string-equal "Mark saved where search started" fmt))
     ((string-equal "Mark set" fmt))
     ((string-equal "Mark activated" fmt))
     ((string-equal "Mark cleared" fmt))
     ((string-match "^Loading places from " fmt))
-
     ((string-match "^Beginning of buffer" fmt))
 
     ((and
       args
+      (stringp (car args))
       (or
         (string-match "^When done with this frame, type " (car args))
         (string-match "^Beginning of buffer" (car args))
       )
     ))
 
-    ((apply message--old fmt args))
+    (t
+     (apply message--old fmt args))
   )
 )
 

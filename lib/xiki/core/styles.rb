@@ -78,7 +78,8 @@ module Xiki
 
     def self.exand_colors options, keys
       keys.each do |key|
-        next if ! options[key]
+        val = options[key]
+        next if ! val || val.to_s == "unspecified"
         options[key].sub! /^#/, ''
         options[key].sub! /^(.)(.)(.)$/, "\\1\\1\\2\\2\\3\\3"
       end
@@ -103,8 +104,12 @@ module Xiki
       #   - t > new frames
 
       code = "(set-face-attribute (make-face '#{name.to_s.gsub("_", "-")}) #{frame}"
-      code << "  :background \"##{options[:bg]}\"" if options[:bg]
-      code << "  :foreground \"##{options[:fg]}\"" if options[:fg]
+      if options[:bg]
+        code << (options[:bg].to_s == "unspecified" ? "  :background 'unspecified" : "  :background \"##{options[:bg]}\"")
+      end
+      if options[:fg]
+        code << (options[:fg].to_s == "unspecified" ? "  :foreground 'unspecified" : "  :foreground \"##{options[:fg]}\"")
+      end
       code << "  :family \"#{options[:face]}\"" if options[:face]
 
       if options[:size]

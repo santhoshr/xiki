@@ -1351,7 +1351,7 @@ module Xiki
     end
 
     def self.message txt, options={}
-      $el.message txt
+      $el.message txt if $el
       View.beep if options[:beep]
 
       nil

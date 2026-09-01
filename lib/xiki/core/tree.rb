@@ -1471,7 +1471,7 @@ module Xiki
         matches = ""
         found_yet = false
 
-        IO.foreach(path, *Files.encoding_binary) do |line|
+        IO.foreach(path, *Files.encoding_binary) do |l|
           l.sub!(/[\r\n]+$/, '')
           l.gsub!("\c@", '.')   # Replace out characters that el4r can't handle
           # Swallow up until match
@@ -1496,7 +1496,7 @@ module Xiki
         matches = ""
         found_yet = false
 
-        IO.foreach(path, *Files.encoding_binary) do |line|
+        IO.foreach(path, *Files.encoding_binary) do |l|
           l.sub!(/[\r\n]+$/, '')
           l.gsub!("\c@", '.')   # Replace out characters that el4r can't handle
           # Swallow up until match
@@ -1914,7 +1914,7 @@ module Xiki
       exclamations_normal = options[:exclamations_normal]
 
       # Read in file, if tree looks like a file path
-      tree = File.read(File.expand_path tree) if tree !~ /\n/ && tree =~ /^~/
+      tree = File.read(File.expand_path tree) if tree.is_a?(String) && tree !~ /\n/ && tree =~ /^~/
 
       include_subitems = options[:include_subitems]   # Include sub-items for all children
 

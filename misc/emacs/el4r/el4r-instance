@@ -6,6 +6,22 @@ xiki_dir = File.expand_path $0
 4.times { xiki_dir = File.dirname xiki_dir }
 XIKI_DIR = xiki_dir
 
+Fixnum = Integer unless defined?(Fixnum)
+Bignum = Integer unless defined?(Bignum)
+File.singleton_class.alias_method :exists?, :exist? unless File.respond_to?(:exists?)
+Dir.singleton_class.alias_method :exists?, :exist? unless Dir.respond_to?(:exists?)
+class Object
+  def =~(other); nil; end unless method_defined?(:=~)
+  def !~(other); !(self =~ other); end unless method_defined?(:!~)
+end
+require 'uri'
+module URI
+  def self.encode(*args); DEFAULT_PARSER.escape(*args); end unless respond_to?(:encode)
+  def self.escape(*args); DEFAULT_PARSER.escape(*args); end unless respond_to?(:escape)
+  def self.decode(*args); DEFAULT_PARSER.unescape(*args); end unless respond_to?(:decode)
+  def self.unescape(*args); DEFAULT_PARSER.unescape(*args); end unless respond_to?(:unescape)
+end
+
 require "#{XIKI_DIR}/lib/xiki/core/ol.rb"
 
 ruby_too_old = RUBY_VERSION =~ /^1\.[78]/
